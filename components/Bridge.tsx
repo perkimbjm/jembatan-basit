@@ -374,21 +374,40 @@ export const Bridge: React.FC<BridgeProps> = ({ isNight }) => {
                              <boxGeometry args={[2.5, 0.3, 2]} />
                         </mesh>
 
-                        {/* Railings */}
+                        {/* === OUTER RAILINGS (Edge of bridge) === */}
+                        {/* Left Outer */}
                         <mesh position={[0, 4.5, deckWidth/2 - 0.5]} material={materials.steel}>
                             <boxGeometry args={[0.2, 1.2, 0.2]} />
                         </mesh>
-                        <mesh position={[0, 4.5, -deckWidth/2 + 0.5]} material={materials.steel}>
-                            <boxGeometry args={[0.2, 1.2, 0.2]} />
+                         <mesh position={[0, 4.8, deckWidth/2 - 0.5]} material={materials.redAccent}>
+                            <boxGeometry args={[2.6, 0.1, 0.1]} />
                         </mesh>
                         
-                        {/* Railing Bars */}
-                        <mesh position={[0, 4.8, deckWidth/2 - 0.5]} material={materials.redAccent}>
-                            <boxGeometry args={[2.6, 0.1, 0.1]} />
+                        {/* Right Outer */}
+                        <mesh position={[0, 4.5, -deckWidth/2 + 0.5]} material={materials.steel}>
+                            <boxGeometry args={[0.2, 1.2, 0.2]} />
                         </mesh>
                         <mesh position={[0, 4.8, -deckWidth/2 + 0.5]} material={materials.redAccent}>
                             <boxGeometry args={[2.6, 0.1, 0.1]} />
                         </mesh>
+
+                        {/* === INNER RAILINGS (Separating Pedestrian from Road) === */}
+                        {/* Left Inner (approx z = 7.4) */}
+                        <mesh position={[0, 4.5, 7.4]} material={materials.steel}>
+                            <boxGeometry args={[0.15, 1.1, 0.15]} />
+                        </mesh>
+                        <mesh position={[0, 4.8, 7.4]} material={materials.redAccent}>
+                             <boxGeometry args={[2.6, 0.1, 0.1]} />
+                        </mesh>
+
+                        {/* Right Inner (approx z = -7.4) */}
+                        <mesh position={[0, 4.5, -7.4]} material={materials.steel}>
+                            <boxGeometry args={[0.15, 1.1, 0.15]} />
+                        </mesh>
+                        <mesh position={[0, 4.8, -7.4]} material={materials.redAccent}>
+                             <boxGeometry args={[2.6, 0.1, 0.1]} />
+                        </mesh>
+
                     </group>
                 </group>
             )
