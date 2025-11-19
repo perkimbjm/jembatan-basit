@@ -1,7 +1,5 @@
 {
-  "name": "Jembatan Alalak (Basit) WebGIS 3D",
-  "description": "WebGIS 3D interaktif menggunakan MapLibre dan Three.js yang memvisualisasikan Jembatan Alalak di Banjarmasin dengan gaya voxel, cuaca dinamis, dan data lalu lintas.",
-  "requestFramePermissions": [
-    "geolocation"
-  ]
+  "name": "Jembatan Alalak (Basit) 3D",
+  "description": "Simulasi voxel 3D dari Jembatan Alalak (Basit) Banjarmasin dengan struktur cable-stayed melengkung, cuaca dinamis, dan lalu lintas sungai.",
+  "requestFramePermissions": []
 }
