@@ -1,3 +1,4 @@
+
 import React, { useMemo } from 'react';
 import { useFrame } from '@react-three/fiber';
 import { Instance, Instances } from '@react-three/drei';
@@ -10,10 +11,12 @@ interface BridgeProps {
 
 export const Bridge: React.FC<BridgeProps> = ({ isNight }) => {
   const spanLength = 220; 
-  const pylonHeight = 75; 
+  const pylonHeight = 85; // Increased slightly for new deck height
   const curveIntensity = 50; 
   const deckWidth = 20; 
   const pylonBaseSpacing = 26; 
+  const maxElevation = 14; // Max height at center
+  const baseElevation = 5; // Height at ends
 
   // --- Procedural Textures ---
   const concreteMap = useMemo(() => {
@@ -43,10 +46,10 @@ export const Bridge: React.FC<BridgeProps> = ({ isNight }) => {
     canvas.height = 512;
     const ctx = canvas.getContext('2d');
     if (ctx) {
-      ctx.fillStyle = '#18181b';
+      ctx.fillStyle = '#444444'; // Lighter base
       ctx.fillRect(0, 0, 512, 512);
       for (let i = 0; i < 100000; i++) {
-        ctx.fillStyle = Math.random() > 0.5 ? '#27272a' : '#09090b';
+        ctx.fillStyle = Math.random() > 0.5 ? '#555555' : '#333333';
         ctx.globalAlpha = 0.15;
         ctx.fillRect(Math.random() * 512, Math.random() * 512, 1, 1);
       }
@@ -55,6 +58,49 @@ export const Bridge: React.FC<BridgeProps> = ({ isNight }) => {
     tex.wrapS = THREE.RepeatWrapping;
     tex.wrapT = THREE.RepeatWrapping;
     tex.repeat.set(1, 4);
+    return tex;
+  }, []);
+
+  // Texture for Median Sides (Kerb: Black/White alternating)
+  const kerbMap = useMemo(() => {
+    const canvas = document.createElement('canvas');
+    canvas.width = 128;
+    canvas.height = 64;
+    const ctx = canvas.getContext('2d');
+    if (ctx) {
+      // White Background
+      ctx.fillStyle = '#ffffff';
+      ctx.fillRect(0, 0, 128, 64);
+      // Black Stripes
+      ctx.fillStyle = '#111111';
+      ctx.fillRect(0, 0, 64, 64); // Half black
+    }
+    const tex = new THREE.CanvasTexture(canvas);
+    tex.wrapS = THREE.RepeatWrapping;
+    tex.wrapT = THREE.RepeatWrapping;
+    // Repeat 2 times along the length of the segment to create alternating blocks
+    tex.repeat.set(2, 1); 
+    return tex;
+  }, []);
+
+  // Texture for Median Top (Grass)
+  const grassMap = useMemo(() => {
+    const canvas = document.createElement('canvas');
+    canvas.width = 256;
+    canvas.height = 256;
+    const ctx = canvas.getContext('2d');
+    if (ctx) {
+      ctx.fillStyle = '#365c28'; // Base green
+      ctx.fillRect(0, 0, 256, 256);
+      for (let i = 0; i < 20000; i++) {
+        ctx.fillStyle = Math.random() > 0.5 ? '#4ade80' : '#14532d';
+        ctx.globalAlpha = 0.2;
+        ctx.fillRect(Math.random() * 256, Math.random() * 256, 2, 2);
+      }
+    }
+    const tex = new THREE.CanvasTexture(canvas);
+    tex.wrapS = THREE.RepeatWrapping;
+    tex.wrapT = THREE.RepeatWrapping;
     return tex;
   }, []);
 
@@ -83,7 +129,11 @@ export const Bridge: React.FC<BridgeProps> = ({ isNight }) => {
       roughness: 0.9, 
       bumpMap: asphaltMap, 
       bumpScale: 0.02,
-      color: '#333333'
+      color: '#666666' // Lighter Gray
+    }),
+    roadLine: new THREE.MeshBasicMaterial({ 
+      color: '#ffffff',
+      toneMapped: false // Keep it white even in dim light
     }),
     cable: new THREE.MeshStandardMaterial({ color: '#ff0000', roughness: 0.4, metalness: 0.1 }),
     redAccent: new THREE.MeshStandardMaterial({ color: '#b91c1c', roughness: 0.6 }),
@@ -94,37 +144,63 @@ export const Bridge: React.FC<BridgeProps> = ({ isNight }) => {
       emissive: '#ffaa00', 
       emissiveIntensity: 2, 
       toneMapped: false 
+    }),
+    medianSide: new THREE.MeshStandardMaterial({
+      map: kerbMap,
+      roughness: 0.8
+    }),
+    medianTop: new THREE.MeshStandardMaterial({
+      map: grassMap,
+      roughness: 1.0,
+      color: '#ffffff'
     })
-  }), [concreteMap, asphaltMap]); // Independent of isNight, updated in useFrame
+  }), [concreteMap, asphaltMap, kerbMap, grassMap]);
 
-  // Animate Lights (Chroma Cycle) & Update Materials based on Time
+  // Animate Lights (Chroma Cycle)
   useFrame((state) => {
     const time = state.clock.getElapsedTime();
-    
-    // Pylon Animation Logic
     if (isNight) {
       const hue = (time * 0.15) % 1; 
       const color = new THREE.Color().setHSL(hue, 1, 0.6);
-      
       materials.pylon.color.copy(color);
       materials.pylon.emissive.copy(color);
       materials.pylon.emissiveIntensity = 1.5;
-      materials.pylon.toneMapped = false; // Neon glow look
+      materials.pylon.toneMapped = false;
     } else {
-      // Reset to Concrete look
       materials.pylon.color.set('#e0e0e0');
       materials.pylon.emissive.set('#000000');
       materials.pylon.emissiveIntensity = 0;
       materials.pylon.toneMapped = true;
     }
-
-    // Street Light Logic
     materials.streetLight.emissiveIntensity = isNight ? 2 : 0;
   });
 
+  // --- Math Functions for Curves & Elevation ---
+  
+  // Horizontal S-Curve (XZ Plane)
   const getCurveZ = (x: number) => {
     const normalized = (x / (spanLength / 1.8)) * (Math.PI / 2);
     return Math.cos(normalized) * curveIntensity - curveIntensity;
+  };
+
+  // Vertical Arch (XY Plane) - Elevation
+  const getElevation = (x: number) => {
+    // Normalize x to -1..1 range based on span
+    const normalized = x / (spanLength / 1.9);
+    // Cosine wave for smooth hump
+    if (Math.abs(normalized) > 1.2) return baseElevation; // Flatten out at ends
+    const arch = Math.cos(normalized * (Math.PI / 2));
+    return baseElevation + (arch * maxElevation);
+  };
+
+  // Calculate Vertical Slope (Pitch)
+  const getSlope = (x: number) => {
+     const normalized = x / (spanLength / 1.9);
+     if (Math.abs(normalized) > 1.2) return 0;
+     // Derivative of cos is -sin
+     // y = base + max * cos(k*x) -> y' = -max * k * sin(k*x)
+     const k = (Math.PI / 2) / (spanLength / 1.9);
+     return -maxElevation * k * Math.sin(normalized * (Math.PI / 2));
   };
 
   const getPylonPos = (h: number, side: 'left' | 'right') => {
@@ -133,11 +209,8 @@ export const Bridge: React.FC<BridgeProps> = ({ isNight }) => {
       
       const sideSign = side === 'left' ? 1 : -1;
       const zBase = sideSign * (pylonBaseSpacing / 2);
-      // Outward curve (horns)
       const outwardCurve = sideSign * (t * t * 12); 
       const z = zBase + outwardCurve;
-
-      // Forward lean
       const forwardLean = Math.sin(t * Math.PI / 2) * 15; 
       const x = xBase + forwardLean;
       const y = h - 8; 
@@ -177,16 +250,26 @@ export const Bridge: React.FC<BridgeProps> = ({ isNight }) => {
          [-1, 1].forEach(dir => { 
              const x = xDeckPos * dir;
              const zCenter = getCurveZ(x);
+             const yDeck = getElevation(x); // Attach to elevated deck
              
              [-1, 1].forEach(side => { 
                  const sideName = side === 1 ? 'left' : 'right';
                  const deckZ = zCenter + (side * (deckWidth/2 - 0.5)); 
-                 const pylonPoint = getPylonPos(attachH, sideName);
+                 
+                 // CORRECTED CABLE LOGIC: 
+                 // Left Pylon (sideName='left') connects to Left Side of Deck (side=1)
+                 // Right Pylon (sideName='right') connects to Right Side of Deck (side=-1)
+                 
+                 if ((sideName === 'left' && side === 1) || (sideName === 'right' && side === -1)) {
+                    const pylonPoint = getPylonPos(attachH, sideName);
+                    // Move pylon attach point slightly inward to match inner face
+                    pylonPoint.z += (sideName === 'left' ? -1 : 1);
 
-                 newItems.push({ 
-                    start: pylonPoint, 
-                    end: new THREE.Vector3(x, 4, deckZ),
-                 });
+                    newItems.push({ 
+                        start: pylonPoint, 
+                        end: new THREE.Vector3(x, yDeck + 1, deckZ), // +1 to attach to railing/side
+                    });
+                 }
              });
          });
     }
@@ -195,12 +278,10 @@ export const Bridge: React.FC<BridgeProps> = ({ isNight }) => {
 
   return (
     <group>
-      {/* --- Solid Pylons (Full Tower Glows) --- */}
-      {/* Left Tower */}
+      {/* --- Solid Pylons --- */}
       <mesh material={materials.pylon} castShadow receiveShadow>
           <tubeGeometry args={[leftCurve, 64, 2.5, 12, false]} />
       </mesh>
-      {/* Right Tower */}
       <mesh material={materials.pylon} castShadow receiveShadow>
           <tubeGeometry args={[rightCurve, 64, 2.5, 12, false]} />
       </mesh>
@@ -217,28 +298,35 @@ export const Bridge: React.FC<BridgeProps> = ({ isNight }) => {
             const t = (i / 120) * 2 - 1; 
             const x = t * (spanLength / 2);
             const z = getCurveZ(x);
+            const y = getElevation(x);
             
+            // Horizontal Rotation (Yaw)
             const k = Math.PI / 2 / (spanLength / 1.8);
             const normalizedX = (x / (spanLength / 1.8)) * (Math.PI / 2);
             const dzdx = -k * Math.sin(normalizedX) * curveIntensity;
             const rotY = Math.atan(dzdx);
 
+            // Vertical Rotation (Pitch)
+            const slope = getSlope(x);
+            const rotZ = Math.atan(slope);
+
             const isJoint = i % 10 === 0 && i !== 0 && i !== 120;
 
             return (
-                <group key={i}>
+                <group key={i} position={[x, y, z]} rotation={[0, -rotY, rotZ]}>
+                    
                     {/* Concrete Base */}
-                    {!isJoint && <Instance position={[x, 3, z]} rotation={[0, -rotY, 0]} />}
+                    {!isJoint && <Instance />}
                     
                     {/* Expansion Joint */}
                     {isJoint && (
-                        <mesh position={[x, 3.1, z]} rotation={[0, -rotY, 0]} material={materials.joint}>
+                        <mesh position={[0, 0.1, 0]} material={materials.joint}>
                             <boxGeometry args={[0.4, 1.9, deckWidth - 0.2]} />
                         </mesh>
                     )}
 
                     {/* --- Surface & Details --- */}
-                    <group position={[x, 0, z]} rotation={[0, -rotY, 0]}>
+                    <group position={[0, -3, 0]}> {/* Local offset to align top of box with y */}
                         {/* Left Road Lane */}
                         <mesh position={[0, 4.05, 4]} material={materials.road} receiveShadow>
                             <boxGeometry args={[2.5, 0.1, 7]} />
@@ -248,17 +336,40 @@ export const Bridge: React.FC<BridgeProps> = ({ isNight }) => {
                             <boxGeometry args={[2.5, 0.1, 7]} />
                         </mesh>
 
-                        {/* Median */}
-                        <mesh position={[0, 4.2, 0]} material={materials.concrete}>
+                        {/* Dashed Road Markings (Divide each 7-unit lane into two) */}
+                        {/* Draw every other segment for dashed effect */}
+                        {i % 2 === 0 && (
+                          <>
+                            {/* Left Lane Marking (Center at z=4) */}
+                            <mesh position={[0, 4.11, 4]} rotation={[-Math.PI/2, 0, 0]}>
+                                <planeGeometry args={[1.5, 0.15]} />
+                                <primitive object={materials.roadLine} attach="material" />
+                            </mesh>
+                            {/* Right Lane Marking (Center at z=-4) */}
+                            <mesh position={[0, 4.11, -4]} rotation={[-Math.PI/2, 0, 0]}>
+                                <planeGeometry args={[1.5, 0.15]} />
+                                <primitive object={materials.roadLine} attach="material" />
+                            </mesh>
+                          </>
+                        )}
+
+                        {/* Median with specific materials (Kerb sides, Green top) */}
+                        <mesh position={[0, 4.2, 0]}>
                             <boxGeometry args={[2.5, 0.4, 1]} />
+                            {/* Array of materials: Right, Left, Top, Bottom, Front, Back */}
+                            <primitive object={materials.medianSide} attach="material-0" />
+                            <primitive object={materials.medianSide} attach="material-1" />
+                            <primitive object={materials.medianTop} attach="material-2" />
+                            <primitive object={materials.concrete} attach="material-3" />
+                            <primitive object={materials.concrete} attach="material-4" />
+                            <primitive object={materials.concrete} attach="material-5" />
                         </mesh>
 
-                        {/* --- Jalur Pedestrian (Trotoar) --- */}
-                        {/* Sisi Kiri (+Z arah keluar dari pusat jalan +4) */}
+                        {/* Sidewalk Left */}
                         <mesh position={[0, 4.2, 8.5]} material={materials.sidewalk} receiveShadow>
                              <boxGeometry args={[2.5, 0.3, 2]} /> 
                         </mesh>
-                        {/* Sisi Kanan (-Z arah keluar dari pusat jalan -4) */}
+                        {/* Sidewalk Right */}
                         <mesh position={[0, 4.2, -8.5]} material={materials.sidewalk} receiveShadow>
                              <boxGeometry args={[2.5, 0.3, 2]} />
                         </mesh>
@@ -317,14 +428,20 @@ export const Bridge: React.FC<BridgeProps> = ({ isNight }) => {
              if (Math.abs(x) < 15) return null; 
 
              const z = getCurveZ(x);
+             const y = getElevation(x); // Follow elevation
              
+             // Yaw
              const k = Math.PI / 2 / (spanLength / 1.8);
              const normalizedX = (x / (spanLength / 1.8)) * (Math.PI / 2);
              const dzdx = -k * Math.sin(normalizedX) * curveIntensity;
              const rotY = Math.atan(dzdx);
+
+             // Pitch
+             const slope = getSlope(x);
+             const rotZ = Math.atan(slope);
              
              return (
-                 <group key={i} position={[x, 4, z]} rotation={[0, -rotY, 0]}>
+                 <group key={i} position={[x, y + 1, z]} rotation={[0, -rotY, rotZ]}>
                      <mesh position={[0, 3, 0]} material={materials.steel}>
                          <cylinderGeometry args={[0.15, 0.2, 6]} />
                      </mesh>
