@@ -15,11 +15,6 @@ const App: React.FC = () => {
   
   const mapContainer = useRef<HTMLDivElement>(null);
   const [mapInstance, setMapInstance] = useState<maplibregl.Map | null>(null);
-  const [viewState, setViewState] = useState({
-    zoom: 16,
-    pitch: 60,
-    bearing: -45
-  });
 
   // Initialize MapLibre
   useEffect(() => {
@@ -33,21 +28,14 @@ const App: React.FC = () => {
       zoom: 16.5,
       pitch: 60,
       bearing: -45,
-      antialias: true,
     });
 
     map.on('load', () => {
       setMapInstance(map);
     });
     
-    // Force a re-render of the 3D scene when map moves to sync camera
-    map.on('move', () => {
-      setViewState({
-        zoom: map.getZoom(),
-        pitch: map.getPitch(),
-        bearing: map.getBearing()
-      });
-    });
+    // Note: We do not sync state back to React on 'move' to avoid performance thrashing.
+    // The SceneContainer reads directly from the map instance via useFrame.
 
     return () => {
       map.remove();
@@ -87,14 +75,14 @@ const App: React.FC = () => {
             depth: true,
             preserveDrawingBuffer: true 
           }}
-          // Camera will be controlled by SceneContainer via Map sync
+          // Camera is controlled by SceneContainer via Map sync
         >
           {mapInstance && <SceneContainer state={simState} map={mapInstance} />}
         </Canvas>
       </div>
 
       {/* UI Overlay */}
-      <div className="absolute top-4 left-4 z-20 w-80 bg-black/80 backdrop-blur-md p-6 rounded-xl border border-white/10 text-white shadow-2xl max-h-[90vh] overflow-y-auto">
+      <div className="absolute top-4 left-4 z-20 w-80 bg-black/80 backdrop-blur-md p-6 rounded-xl border border-white/10 text-white shadow-2xl max-h-[90vh] overflow-y-auto pointer-events-auto">
         <div className="flex justify-between items-start mb-2">
           <div>
              <h1 className="text-2xl font-bold bg-gradient-to-r from-red-500 to-white bg-clip-text text-transparent">
@@ -130,7 +118,7 @@ const App: React.FC = () => {
               step="0.1"
               value={simState.time}
               onChange={(e) => handleChange('time', parseFloat(e.target.value))}
-              className="w-full h-2 bg-gray-700 rounded-lg appearance-none cursor-pointer accent-orange-500 pointer-events-auto"
+              className="w-full h-2 bg-gray-700 rounded-lg appearance-none cursor-pointer accent-orange-500"
             />
             <div className="flex justify-between text-[10px] text-gray-500 mt-1">
               <span>Malam</span>
@@ -151,7 +139,7 @@ const App: React.FC = () => {
               max="100"
               value={simState.fogDensity}
               onChange={(e) => handleChange('fogDensity', parseFloat(e.target.value))}
-              className="w-full h-2 bg-gray-700 rounded-lg appearance-none cursor-pointer accent-blue-500 pointer-events-auto"
+              className="w-full h-2 bg-gray-700 rounded-lg appearance-none cursor-pointer accent-blue-500"
             />
           </div>
 
@@ -167,7 +155,7 @@ const App: React.FC = () => {
               max="100"
               value={simState.trafficDensity}
               onChange={(e) => handleChange('trafficDensity', parseFloat(e.target.value))}
-              className="w-full h-2 bg-gray-700 rounded-lg appearance-none cursor-pointer accent-green-500 pointer-events-auto"
+              className="w-full h-2 bg-gray-700 rounded-lg appearance-none cursor-pointer accent-green-500"
             />
           </div>
 

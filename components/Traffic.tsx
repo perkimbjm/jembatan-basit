@@ -1,3 +1,4 @@
+
 import React, { useRef, useMemo, useEffect } from 'react';
 import { useFrame } from '@react-three/fiber';
 import * as THREE from 'three';
@@ -12,7 +13,8 @@ export const Traffic: React.FC<TrafficProps> = ({ density, isNight }) => {
   const headlightsRef = useRef<THREE.InstancedMesh>(null);
   const taillightsRef = useRef<THREE.InstancedMesh>(null);
   
-  const maxCars = 300;
+  // OPTIMIZATION: Reduced from 300 to 150
+  const maxCars = 150;
   const dummy = useMemo(() => new THREE.Object3D(), []);
   
   // Curve logic copied from Bridge to keep cars on road
@@ -83,11 +85,7 @@ export const Traffic: React.FC<TrafficProps> = ({ density, isNight }) => {
       const offsetZ = Math.cos(rotY) * laneOffset;
 
       const x = car.x + offsetX;
-      const z = baseZ + offsetZ; // Invert offsetZ logic? No, geometry is mirrored.
-      
-      // Correct z offset based on rotation visualization
-      // If rotY is angle of tangent. Normal is rotY - 90.
-      // Easier: Use the precomputed rotation matrix logic or just simple offset approx
+      const z = baseZ + offsetZ; 
       
       const finalX = car.x - (Math.sin(rotY) * laneOffset);
       const finalZ = baseZ + (Math.cos(rotY) * laneOffset);
@@ -97,7 +95,6 @@ export const Traffic: React.FC<TrafficProps> = ({ density, isNight }) => {
       // Car Body
       dummy.position.set(finalX, y, finalZ);
       // Rotate car to follow road curve
-      // If lane is -1, rotate 180 deg
       const carRot = -rotY + (car.lane === -1 ? Math.PI : 0);
       dummy.rotation.set(0, carRot, 0);
       
@@ -108,10 +105,6 @@ export const Traffic: React.FC<TrafficProps> = ({ density, isNight }) => {
       // Headlights
       const lFront = 1.1;
       const lWide = 0.6;
-      
-      // Re-use local coordinates transformed by matrix would be cleaner, but manual is faster for simple boxes
-      // Actually, let's just parent them logically in world space
-      // Simplest: Calculate offset in world space based on rotation
       
       const cosR = Math.cos(carRot);
       const sinR = Math.sin(carRot);
