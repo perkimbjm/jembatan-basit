@@ -15,9 +15,9 @@ export const Traffic: React.FC<TrafficProps> = ({ density, isNight }) => {
   const maxCars = 300;
   const dummy = useMemo(() => new THREE.Object3D(), []);
   
-  // Curve logic copied from Bridge to keep cars on road
-  const spanLength = 160;
-  const curveIntensity = 35;
+  // Matched to Bridge.tsx params
+  const spanLength = 220;
+  const curveIntensity = 50;
   
   const getCurveZ = (x: number) => {
     const normalized = (x / (spanLength / 1.8)) * (Math.PI / 2);
@@ -34,9 +34,10 @@ export const Traffic: React.FC<TrafficProps> = ({ density, isNight }) => {
   // Initialize car data
   const cars = useMemo(() => {
     return new Array(maxCars).fill(0).map(() => ({
-      x: (Math.random() - 0.5) * (spanLength + 40),
-      speed: Math.random() * 0.2 + 0.15,
+      x: (Math.random() - 0.5) * (spanLength + 60),
+      speed: Math.random() * 0.25 + 0.15,
       lane: Math.random() > 0.5 ? 1 : -1, // 1 = forward (right lane), -1 = backward (left lane)
+      laneSubIndex: Math.random() > 0.5 ? 0 : 1, // 2 sub-lanes per direction? Let's stick to 1 per direction for now based on bridge width
       color: new THREE.Color().setHSL(Math.random(), 0.8, 0.5),
     }));
   }, []);
@@ -66,7 +67,7 @@ export const Traffic: React.FC<TrafficProps> = ({ density, isNight }) => {
       car.x += car.speed * car.lane; 
       
       // Loop logic
-      const bound = (spanLength / 2) + 20;
+      const bound = (spanLength / 2) + 40;
       if (car.x > bound) car.x = -bound;
       if (car.x < -bound) car.x = bound;
 
@@ -74,21 +75,25 @@ export const Traffic: React.FC<TrafficProps> = ({ density, isNight }) => {
       const baseZ = getCurveZ(car.x);
       const rotY = getRotationY(car.x);
       
-      // Offset from center line based on lane
-      // If lane 1, we are on right side of road relative to forward direction
-      // We need to offset perpendicular to the curve tangent
-      const laneOffset = car.lane === 1 ? 3 : -3;
+      // Lane Logic
+      // Deck Width is 16. Center is 0. Median is ~1 unit.
+      // Lane centers roughly at +/- 4.0
       
-      const offsetX = Math.sin(rotY) * laneOffset;
-      const offsetZ = Math.cos(rotY) * laneOffset;
-
-      const x = car.x + offsetX;
-      const z = baseZ + offsetZ; // Invert offsetZ logic? No, geometry is mirrored.
+      // Indonesia: Left Hand Traffic.
+      // Lane 1 (Forward +X): Should be on Left side of road relative to travel.
+      // Facing +X, Left is -Z axis in our setup (since we look from side). 
+      // Wait, normally Z+ is out of screen.
+      // Let's align visually:
+      // If car goes Right (+X), it should be on the "Top" lane (-Z) ?
+      // Let's use simple logic:
+      // Lane 1 (+X): Z = -4
+      // Lane -1 (-X): Z = 4
       
-      // Correct z offset based on rotation visualization
-      // If rotY is angle of tangent. Normal is rotY - 90.
-      // Easier: Use the precomputed rotation matrix logic or just simple offset approx
+      const laneOffset = car.lane === 1 ? -4 : 4;
       
+      // Apply rotation to offset vector
+      // Offset vector is (0, 0, laneOffset)
+      // Rotated by Y axis
       const finalX = car.x - (Math.sin(rotY) * laneOffset);
       const finalZ = baseZ + (Math.cos(rotY) * laneOffset);
 
@@ -96,8 +101,6 @@ export const Traffic: React.FC<TrafficProps> = ({ density, isNight }) => {
 
       // Car Body
       dummy.position.set(finalX, y, finalZ);
-      // Rotate car to follow road curve
-      // If lane is -1, rotate 180 deg
       const carRot = -rotY + (car.lane === -1 ? Math.PI : 0);
       dummy.rotation.set(0, carRot, 0);
       
@@ -105,34 +108,23 @@ export const Traffic: React.FC<TrafficProps> = ({ density, isNight }) => {
       dummy.updateMatrix();
       meshRef.current.setMatrixAt(i, dummy.matrix);
 
-      // Headlights
+      // Headlights / Taillights Logic
       const lFront = 1.1;
       const lWide = 0.6;
-      
-      // Re-use local coordinates transformed by matrix would be cleaner, but manual is faster for simple boxes
-      // Actually, let's just parent them logically in world space
-      // Simplest: Calculate offset in world space based on rotation
-      
       const cosR = Math.cos(carRot);
       const sinR = Math.sin(carRot);
       
-      // Front Left
       const h1x = finalX + (lFront * cosR) - (lWide * sinR);
       const h1z = finalZ + (-lFront * sinR) - (lWide * cosR);
-      
-      // Front Right
       const h2x = finalX + (lFront * cosR) + (lWide * sinR);
       const h2z = finalZ + (-lFront * sinR) + (lWide * cosR);
 
-      // Rear Left
       const t1x = finalX - (lFront * cosR) - (lWide * sinR);
       const t1z = finalZ - (-lFront * sinR) - (lWide * cosR);
-      
-      // Rear Right
       const t2x = finalX - (lFront * cosR) + (lWide * sinR);
       const t2z = finalZ - (-lFront * sinR) + (lWide * cosR);
 
-      // Apply Headlights
+      // Headlights
       dummy.scale.set(0.2, 0.2, 0.2);
       dummy.rotation.set(0, carRot, 0);
 
@@ -144,7 +136,7 @@ export const Traffic: React.FC<TrafficProps> = ({ density, isNight }) => {
       dummy.updateMatrix();
       headlightsRef.current.setMatrixAt(i * 2 + 1, dummy.matrix);
 
-      // Apply Taillights
+      // Taillights
       dummy.position.set(t1x, y, t1z);
       dummy.updateMatrix();
       taillightsRef.current.setMatrixAt(i * 2, dummy.matrix);
