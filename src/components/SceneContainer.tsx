@@ -1,4 +1,4 @@
-import React, { useMemo, useRef } from 'react';
+import React, { useMemo } from 'react';
 import { useFrame, useThree } from '@react-three/fiber';
 import { OrbitControls, Stars, Sky } from '@react-three/drei';
 import { EffectComposer, Bloom, ToneMapping } from '@react-three/postprocessing';
@@ -10,6 +10,8 @@ import { Water } from './Water';
 import { Traffic } from './Traffic';
 import { Terrain } from './Terrain';
 import { FogParticles } from './FogParticles';
+import { Rain } from './Rain';
+import { HeatHaze } from './HeatHaze';
 import { Ships } from './Ships';
 
 interface SceneProps {
@@ -17,7 +19,7 @@ interface SceneProps {
 }
 
 export const SceneContainer: React.FC<SceneProps> = ({ state }) => {
-  const { camera, scene } = useThree();
+  const { scene } = useThree();
   
   // Calculate sun position based on time (0-24)
   const sunPosition = useMemo(() => {
@@ -32,9 +34,24 @@ export const SceneContainer: React.FC<SceneProps> = ({ state }) => {
   const isNight = state.time > 19 || state.time < 5;
   const lightIntensity = isNight ? 0.1 : 1.5;
 
+  // Calculate rain and heat intensities from weather value
+  const rainIntensity = state.weather < 0 ? Math.abs(state.weather) : 0;
+  const heatIntensity = state.weather > 0 ? state.weather : 0;
+
   // Update fog and background
   useFrame(() => {
-    const fogColor = isNight ? new THREE.Color('#050510') : new THREE.Color('#dcebf5');
+    let fogColor = isNight ? new THREE.Color('#050510') : new THREE.Color('#dcebf5');
+    
+    // Darken sky when raining
+    if (rainIntensity > 0) {
+      fogColor.lerp(new THREE.Color('#6b7280'), rainIntensity / 200);
+    }
+    
+    // Warm up sky when hot
+    if (heatIntensity > 0) {
+      fogColor.lerp(new THREE.Color('#fef3c7'), heatIntensity / 300);
+    }
+    
     // Blend fog color based on time for sunset/sunrise
     if (state.time > 17 && state.time < 20) fogColor.lerp(new THREE.Color('#fdba74'), 0.5);
     if (state.time > 4 && state.time < 7) fogColor.lerp(new THREE.Color('#fdba74'), 0.5);
@@ -84,12 +101,16 @@ export const SceneContainer: React.FC<SceneProps> = ({ state }) => {
 
       {/* World Components */}
       <group>
-        <Bridge isNight={isNight} />
-        <Traffic density={state.trafficDensity} isNight={isNight} />
+        <Bridge isNight={isNight} wetness={rainIntensity} />
+        <Traffic density={state.trafficDensity} isNight={isNight} rainIntensity={rainIntensity} />
         <Water sunPosition={sunPosition} time={state.time} />
         <Terrain />
         <Ships isNight={isNight} />
         <FogParticles density={state.fogDensity} />
+        
+        {/* Weather Effects */}
+        {rainIntensity > 0 && <Rain intensity={rainIntensity} />}
+        {heatIntensity > 0 && <HeatHaze intensity={heatIntensity} />}
       </group>
 
       {/* Post Processing */}

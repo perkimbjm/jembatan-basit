@@ -6,12 +6,26 @@ import * as THREE from 'three';
 interface TrafficProps {
   density: number;
   isNight: boolean;
+  rainIntensity: number; // 0-100, controls water splash
 }
 
-export const Traffic: React.FC<TrafficProps> = ({ density, isNight }) => {
-  const meshRef = useRef<THREE.InstancedMesh>(null);
+export const Traffic: React.FC<TrafficProps> = ({ density, isNight, rainIntensity }) => {
+  // Car body parts
+  const bodyRef = useRef<THREE.InstancedMesh>(null);
+  const roofRef = useRef<THREE.InstancedMesh>(null);
+  const windshieldRef = useRef<THREE.InstancedMesh>(null);
+  const rearWindowRef = useRef<THREE.InstancedMesh>(null);
+  
+  // Wheels (4 per car)
+  const wheelsRef = useRef<THREE.InstancedMesh>(null);
+  const tiresRef = useRef<THREE.InstancedMesh>(null);
+  
+  // Lights
   const headlightsRef = useRef<THREE.InstancedMesh>(null);
   const taillightsRef = useRef<THREE.InstancedMesh>(null);
+  
+  // Effects
+  const splashRef = useRef<THREE.InstancedMesh>(null);
   
   const maxCars = 300;
   const dummy = useMemo(() => new THREE.Object3D(), []);
@@ -63,22 +77,28 @@ export const Traffic: React.FC<TrafficProps> = ({ density, isNight }) => {
   }, []);
 
   useEffect(() => {
-    if (meshRef.current) {
+    if (bodyRef.current) {
       cars.forEach((car, i) => {
-        meshRef.current!.setColorAt(i, car.color);
+        bodyRef.current!.setColorAt(i, car.color);
       });
-      meshRef.current.instanceColor!.needsUpdate = true;
+      bodyRef.current.instanceColor!.needsUpdate = true;
     }
   }, [cars]);
 
   useFrame((state) => {
-    if (!meshRef.current || !headlightsRef.current || !taillightsRef.current) return;
+    if (!bodyRef.current || !wheelsRef.current || !tiresRef.current) return;
 
     const activeCount = Math.floor((density / 100) * maxCars);
 
-    meshRef.current.count = activeCount;
-    headlightsRef.current.count = activeCount;
-    taillightsRef.current.count = activeCount;
+    // Update counts
+    bodyRef.current.count = activeCount;
+    roofRef.current!.count = activeCount;
+    windshieldRef.current!.count = activeCount;
+    rearWindowRef.current!.count = activeCount;
+    wheelsRef.current.count = activeCount * 4; // 4 wheels per car
+    tiresRef.current.count = activeCount * 4;
+    headlightsRef.current!.count = activeCount * 2;
+    taillightsRef.current!.count = activeCount * 2;
 
     for (let i = 0; i < activeCount; i++) {
       const car = cars[i];
@@ -102,91 +122,198 @@ export const Traffic: React.FC<TrafficProps> = ({ density, isNight }) => {
       
       const finalX = car.x - (Math.sin(rotY) * laneOffset);
       const finalZ = baseZ + (Math.cos(rotY) * laneOffset);
-      const finalY = baseY + 1.8; // 1.8 sits on top of deck surface
-
-      // Car Body
-      dummy.position.set(finalX, finalY, finalZ);
+      const finalY = baseY + 1.5; // Lower to account for wheels
       
       const carYaw = -rotY + (car.lane === -1 ? Math.PI : 0);
-      const carPitch = (car.lane === 1) ? Math.atan(slope) : -Math.atan(slope); // Invert pitch if driving backwards? No, slope is purely geometric.
-      // Actually: if moving -X, and slope is positive (uphill for +X), it's downhill for -X.
-      // But slope returns dy/dx. 
-      // If driving +X (Left to Right), slope > 0 means nose up.
-      // If driving -X (Right to Left), slope > 0 means tail up (nose down).
-      
-      // ThreeJS rotation order default is XYZ.
-      // We need to rotate Y for direction, then Z for slope.
-      // Actually let's just use Z rotation derived from slope.
-      // Slope is dY/dX.
-      // RotZ = atan(slope).
-      
-      dummy.rotation.set(0, carYaw, Math.atan(slope)); 
-      
+      const carPitch = Math.atan(slope);
+
+      // === CAR BODY (lower part) ===
+      dummy.position.set(finalX, finalY, finalZ);
+      dummy.rotation.set(0, carYaw, carPitch);
       dummy.scale.set(1, 1, 1);
       dummy.updateMatrix();
-      meshRef.current.setMatrixAt(i, dummy.matrix);
+      bodyRef.current.setMatrixAt(i, dummy.matrix);
 
-      // Headlights / Taillights Logic
-      const lFront = 1.1;
-      const lWide = 0.6;
+      // === ROOF (upper part) ===
+      dummy.position.set(finalX, finalY + 0.5, finalZ);
+      dummy.rotation.set(0, carYaw, carPitch);
+      dummy.scale.set(1, 1, 1);
+      dummy.updateMatrix();
+      roofRef.current!.setMatrixAt(i, dummy.matrix);
+
+      // === WINDSHIELD (front window) ===
       const cosR = Math.cos(carYaw);
       const sinR = Math.sin(carYaw);
+      const windshieldOffset = 0.7;
+      const windshieldX = finalX + (windshieldOffset * cosR);
+      const windshieldZ = finalZ + (-windshieldOffset * sinR);
       
-      // We assume flat projection for lights relative to car center for simplicity, 
-      // but correctly they should follow the pitch. 
-      // Since dummy matrix handles rotation, we can just use local offsets if we nested them,
-      // but here we are setting world matrices. 
-      // Simplification: Just position lights relative to final X/Z and same Y, relying on small size.
-      // Better: Apply rotation to light offsets.
+      dummy.position.set(windshieldX, finalY + 0.5, windshieldZ);
+      dummy.rotation.set(0, carYaw, carPitch);
+      dummy.scale.set(1, 1, 1);
+      dummy.updateMatrix();
+      windshieldRef.current!.setMatrixAt(i, dummy.matrix);
+
+      // === REAR WINDOW ===
+      const rearWindowX = finalX - (windshieldOffset * cosR);
+      const rearWindowZ = finalZ - (-windshieldOffset * sinR);
       
-      // Simple offset approximation ignoring pitch for lights placement (barely noticeable)
+      dummy.position.set(rearWindowX, finalY + 0.5, rearWindowZ);
+      dummy.rotation.set(0, carYaw, carPitch);
+      dummy.scale.set(1, 1, 1);
+      dummy.updateMatrix();
+      rearWindowRef.current!.setMatrixAt(i, dummy.matrix);
+
+      // === WHEELS (4 wheels per car) ===
+      const wheelPositions = [
+        { x: 0.8, z: 0.6 },   // Front left
+        { x: 0.8, z: -0.6 },  // Front right
+        { x: -0.8, z: 0.6 },  // Rear left
+        { x: -0.8, z: -0.6 }, // Rear right
+      ];
+
+      wheelPositions.forEach((wheelPos, wheelIdx) => {
+        const wheelX = finalX + (wheelPos.x * cosR) - (wheelPos.z * sinR);
+        const wheelZ = finalZ + (-wheelPos.x * sinR) - (wheelPos.z * cosR);
+        const wheelY = finalY - 0.3;
+
+        // Wheel rim (silver)
+        dummy.position.set(wheelX, wheelY, wheelZ);
+        dummy.rotation.set(carPitch, carYaw, state.clock.elapsedTime * car.speed * 5);
+        dummy.scale.set(1, 1, 1);
+        dummy.updateMatrix();
+        wheelsRef.current.setMatrixAt(i * 4 + wheelIdx, dummy.matrix);
+
+        // Tire (black, slightly larger)
+        dummy.position.set(wheelX, wheelY, wheelZ);
+        dummy.rotation.set(carPitch, carYaw, state.clock.elapsedTime * car.speed * 5);
+        dummy.scale.set(1.1, 1.1, 1.1);
+        dummy.updateMatrix();
+        tiresRef.current.setMatrixAt(i * 4 + wheelIdx, dummy.matrix);
+      });
+
+      // === HEADLIGHTS ===
+      const lFront = 1.2;
+      const lWide = 0.5;
+      
       const h1x = finalX + (lFront * cosR) - (lWide * sinR);
       const h1z = finalZ + (-lFront * sinR) - (lWide * cosR);
       const h2x = finalX + (lFront * cosR) + (lWide * sinR);
       const h2z = finalZ + (-lFront * sinR) + (lWide * cosR);
 
+      dummy.scale.set(0.15, 0.15, 0.15);
+      dummy.rotation.set(0, carYaw, carPitch);
+
+      dummy.position.set(h1x, finalY - 0.1, h1z);
+      dummy.updateMatrix();
+      headlightsRef.current!.setMatrixAt(i * 2, dummy.matrix);
+
+      dummy.position.set(h2x, finalY - 0.1, h2z);
+      dummy.updateMatrix();
+      headlightsRef.current!.setMatrixAt(i * 2 + 1, dummy.matrix);
+
+      // === TAILLIGHTS ===
       const t1x = finalX - (lFront * cosR) - (lWide * sinR);
       const t1z = finalZ - (-lFront * sinR) - (lWide * cosR);
       const t2x = finalX - (lFront * cosR) + (lWide * sinR);
       const t2z = finalZ - (-lFront * sinR) + (lWide * cosR);
 
-      // Headlights
-      dummy.scale.set(0.2, 0.2, 0.2);
-      // Reuse rotation
-      dummy.rotation.set(0, carYaw, Math.atan(slope));
-
-      dummy.position.set(h1x, finalY, h1z);
+      dummy.position.set(t1x, finalY - 0.1, t1z);
       dummy.updateMatrix();
-      headlightsRef.current.setMatrixAt(i * 2, dummy.matrix);
+      taillightsRef.current!.setMatrixAt(i * 2, dummy.matrix);
 
-      dummy.position.set(h2x, finalY, h2z);
+      dummy.position.set(t2x, finalY - 0.1, t2z);
       dummy.updateMatrix();
-      headlightsRef.current.setMatrixAt(i * 2 + 1, dummy.matrix);
-
-      // Taillights
-      dummy.position.set(t1x, finalY, t1z);
-      dummy.updateMatrix();
-      taillightsRef.current.setMatrixAt(i * 2, dummy.matrix);
-
-      dummy.position.set(t2x, finalY, t2z);
-      dummy.updateMatrix();
-      taillightsRef.current.setMatrixAt(i * 2 + 1, dummy.matrix);
+      taillightsRef.current!.setMatrixAt(i * 2 + 1, dummy.matrix);
+      
+      // === WATER SPLASH ===
+      if (splashRef.current && rainIntensity > 0) {
+        const splashCount = 4;
+        for (let j = 0; j < splashCount; j++) {
+          const idx = i * splashCount + j;
+          const offset = -1.5 - (j * 0.3);
+          const splashX = finalX - (offset * cosR);
+          const splashZ = finalZ - (-offset * sinR);
+          const splashY = finalY - 0.5 + Math.sin(state.clock.elapsedTime * 10 + idx) * 0.2;
+          
+          dummy.position.set(splashX, splashY, splashZ);
+          dummy.rotation.set(0, Math.random() * Math.PI * 2, 0);
+          dummy.scale.set(0.3, 0.3, 0.3);
+          dummy.updateMatrix();
+          splashRef.current.setMatrixAt(idx, dummy.matrix);
+        }
+      }
     }
 
-    meshRef.current.instanceMatrix.needsUpdate = true;
-    headlightsRef.current.instanceMatrix.needsUpdate = true;
-    taillightsRef.current.instanceMatrix.needsUpdate = true;
+    // Update all matrices
+    bodyRef.current.instanceMatrix.needsUpdate = true;
+    roofRef.current!.instanceMatrix.needsUpdate = true;
+    windshieldRef.current!.instanceMatrix.needsUpdate = true;
+    rearWindowRef.current!.instanceMatrix.needsUpdate = true;
+    wheelsRef.current.instanceMatrix.needsUpdate = true;
+    tiresRef.current.instanceMatrix.needsUpdate = true;
+    headlightsRef.current!.instanceMatrix.needsUpdate = true;
+    taillightsRef.current!.instanceMatrix.needsUpdate = true;
+    
+    if (splashRef.current) {
+      splashRef.current.count = rainIntensity > 0 ? Math.floor((density / 100) * maxCars) * 4 : 0;
+      splashRef.current.instanceMatrix.needsUpdate = true;
+    }
   });
 
   return (
     <group>
-      <instancedMesh ref={meshRef} args={[undefined, undefined, maxCars]} castShadow>
-        <boxGeometry args={[2.2, 0.8, 1.4]} />
-        <meshStandardMaterial roughness={0.3} metalness={0.6} />
+      {/* Car Body (lower part) */}
+      <instancedMesh ref={bodyRef} args={[undefined, undefined, maxCars]} castShadow>
+        <boxGeometry args={[2.4, 0.6, 1.4]} />
+        <meshStandardMaterial roughness={0.2} metalness={0.8} />
       </instancedMesh>
 
+      {/* Roof (cabin) */}
+      <instancedMesh ref={roofRef} args={[undefined, undefined, maxCars]} castShadow>
+        <boxGeometry args={[1.2, 0.5, 1.2]} />
+        <meshStandardMaterial roughness={0.2} metalness={0.8} />
+      </instancedMesh>
+
+      {/* Windshield (front window) */}
+      <instancedMesh ref={windshieldRef} args={[undefined, undefined, maxCars]}>
+        <boxGeometry args={[0.1, 0.4, 1.1]} />
+        <meshStandardMaterial 
+          color="#88ccff"
+          transparent
+          opacity={0.3}
+          roughness={0.1}
+          metalness={0.1}
+        />
+      </instancedMesh>
+
+      {/* Rear Window */}
+      <instancedMesh ref={rearWindowRef} args={[undefined, undefined, maxCars]}>
+        <boxGeometry args={[0.1, 0.4, 1.1]} />
+        <meshStandardMaterial 
+          color="#88ccff"
+          transparent
+          opacity={0.3}
+          roughness={0.1}
+          metalness={0.1}
+        />
+      </instancedMesh>
+
+      {/* Wheel Rims (silver) */}
+      <instancedMesh ref={wheelsRef} args={[undefined, undefined, maxCars * 4]} castShadow>
+        <cylinderGeometry args={[0.3, 0.3, 0.2, 16]} />
+        <meshStandardMaterial color="#cccccc" roughness={0.3} metalness={0.9} />
+      </instancedMesh>
+
+      {/* Tires (black rubber) */}
+      <instancedMesh ref={tiresRef} args={[undefined, undefined, maxCars * 4]} castShadow>
+        <torusGeometry args={[0.3, 0.12, 8, 16]} />
+        <meshStandardMaterial color="#1a1a1a" roughness={0.9} metalness={0.1} />
+      </instancedMesh>
+
+      {/* Headlights */}
       <instancedMesh ref={headlightsRef} args={[undefined, undefined, maxCars * 2]}>
-        <boxGeometry args={[1, 1, 1]} />
+        <sphereGeometry args={[1, 8, 8]} />
         <meshStandardMaterial 
           color="#ffffff" 
           emissive="#ffffff" 
@@ -195,13 +322,26 @@ export const Traffic: React.FC<TrafficProps> = ({ density, isNight }) => {
         />
       </instancedMesh>
 
+      {/* Taillights */}
       <instancedMesh ref={taillightsRef} args={[undefined, undefined, maxCars * 2]}>
-        <boxGeometry args={[1, 1, 1]} />
+        <sphereGeometry args={[1, 8, 8]} />
         <meshStandardMaterial 
           color="#ff0000" 
           emissive="#ff0000" 
           emissiveIntensity={isNight ? 2 : 0.5} 
           toneMapped={false} 
+        />
+      </instancedMesh>
+      
+      {/* Water Splash Particles */}
+      <instancedMesh ref={splashRef} args={[undefined, undefined, maxCars * 4]}>
+        <sphereGeometry args={[1, 6, 6]} />
+        <meshStandardMaterial 
+          color="#aaccff" 
+          transparent
+          opacity={0.4}
+          roughness={0.1}
+          metalness={0.2}
         />
       </instancedMesh>
     </group>

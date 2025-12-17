@@ -1,5 +1,5 @@
 
-import React, { useMemo } from 'react';
+import React, { useMemo, useRef } from 'react';
 import { useFrame } from '@react-three/fiber';
 import { Instance, Instances } from '@react-three/drei';
 import * as THREE from 'three';
@@ -7,9 +7,10 @@ import { BRIDGE_COLORS } from '../types';
 
 interface BridgeProps {
   isNight: boolean;
+  wetness: number; // 0-100, controls road reflectivity
 }
 
-export const Bridge: React.FC<BridgeProps> = ({ isNight }) => {
+export const Bridge: React.FC<BridgeProps> = ({ isNight, wetness }) => {
   const spanLength = 220; 
   const pylonHeight = 85; // Increased slightly for new deck height
   const curveIntensity = 50; 
@@ -156,7 +157,7 @@ export const Bridge: React.FC<BridgeProps> = ({ isNight }) => {
     })
   }), [concreteMap, asphaltMap, kerbMap, grassMap]);
 
-  // Animate Lights (Chroma Cycle)
+  // Animate Lights (Chroma Cycle) and Road Wetness
   useFrame((state) => {
     const time = state.clock.getElapsedTime();
     if (isNight) {
@@ -173,6 +174,17 @@ export const Bridge: React.FC<BridgeProps> = ({ isNight }) => {
       materials.pylon.toneMapped = true;
     }
     materials.streetLight.emissiveIntensity = isNight ? 2 : 0;
+    
+    // Animate road wetness
+    const wetnessNormalized = wetness / 100;
+    // Wet asphalt is darker, more reflective (lower roughness, higher metalness)
+    materials.road.roughness = THREE.MathUtils.lerp(0.9, 0.2, wetnessNormalized);
+    materials.road.metalness = THREE.MathUtils.lerp(0, 0.3, wetnessNormalized);
+    
+    // Darken road when wet
+    const dryColor = new THREE.Color('#666666');
+    const wetColor = new THREE.Color('#333333');
+    materials.road.color.lerpColors(dryColor, wetColor, wetnessNormalized);
   });
 
   // --- Math Functions for Curves & Elevation ---

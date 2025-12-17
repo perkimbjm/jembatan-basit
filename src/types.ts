@@ -3,6 +3,7 @@ export interface SimulationState {
   fogDensity: number; // 0-100
   trafficDensity: number; // 0-100
   zoom: number; // 1-10
+  weather: number; // -100 (heavy rain) to 100 (extreme heat), 0 is normal
 }
 
 export const BRIDGE_COLORS = {
