@@ -481,7 +481,26 @@ export const Bridge: React.FC<BridgeProps> = ({ isNight, wetness }) => {
                      </mesh>
                      <Instance position={[0, 5.8, 3]} />
                      <Instance position={[0, 5.8, -3]} />
-                 </group>
+                 {/* Dynamic point lights - only active at night */}
+                      {isNight && (
+                          <>
+                              <pointLight 
+                                  position={[0, 5.5, 3]} 
+                                  color="#ffcc66" 
+                                  intensity={15} 
+                                  distance={20} 
+                                  decay={2}
+                              />
+                              <pointLight 
+                                  position={[0, 5.5, -3]} 
+                                  color="#ffcc66" 
+                                  intensity={15} 
+                                  distance={20} 
+                                  decay={2}
+                              />
+                          </>
+                      )}
+                  </group>
              )
          })}
       </Instances>

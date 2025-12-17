@@ -3,7 +3,7 @@ import { Canvas } from '@react-three/fiber';
 import { Loader } from '@react-three/drei';
 import { SceneContainer } from './components/SceneContainer';
 import { SettingsPanel } from './components/SettingsPanel';
-import { SimulationState } from './types';
+import { SimulationState, CameraMode } from './types';
 
 const App: React.FC = () => {
   const [simState, setSimState] = useState<SimulationState>({
@@ -12,11 +12,12 @@ const App: React.FC = () => {
     trafficDensity: 50,
     zoom: 5,
     weather: 0, // 0 is normal weather
+    cameraMode: 'orbit', // Default to orbit camera
   });
 
   const [isPanelOpen, setIsPanelOpen] = useState(true);
 
-  const handleChange = (key: keyof SimulationState, value: number) => {
+  const handleChange = (key: keyof SimulationState, value: number | CameraMode) => {
     setSimState((prev) => ({ ...prev, [key]: value }));
   };
 

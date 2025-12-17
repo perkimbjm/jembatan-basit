@@ -13,6 +13,8 @@ import { FogParticles } from './FogParticles';
 import { Rain } from './Rain';
 import { HeatHaze } from './HeatHaze';
 import { Ships } from './Ships';
+import { DynamicClouds } from './DynamicClouds';
+import { FirstPersonCamera } from './FirstPersonCamera';
 
 interface SceneProps {
   state: SimulationState;
@@ -35,7 +37,10 @@ export const SceneContainer: React.FC<SceneProps> = ({ state }) => {
   const lightIntensity = isNight ? 0.1 : 1.5;
 
   // Calculate rain and heat intensities from weather value
-  const rainIntensity = state.weather < 0 ? Math.abs(state.weather) : 0;
+  // Rain can also be triggered by high fog density (>80%)
+  const weatherRain = state.weather < 0 ? Math.abs(state.weather) : 0;
+  const fogRain = state.fogDensity > 80 ? (state.fogDensity - 80) * 5 : 0; // 0-100 when fog is 80-100%
+  const rainIntensity = Math.max(weatherRain, fogRain); // Use the higher of the two
   const heatIntensity = state.weather > 0 ? state.weather : 0;
 
   // Update fog and background
@@ -69,12 +74,16 @@ export const SceneContainer: React.FC<SceneProps> = ({ state }) => {
 
   return (
     <>
-      <OrbitControls 
-        minPolarAngle={0} 
-        maxPolarAngle={Math.PI / 2 - 0.05} 
-        maxDistance={200}
-        minDistance={10}
-      />
+      {/* Camera Controls */}
+      {state.cameraMode === 'orbit' && (
+        <OrbitControls 
+          minPolarAngle={0} 
+          maxPolarAngle={Math.PI / 2 - 0.05} 
+          maxDistance={200}
+          minDistance={10}
+        />
+      )}
+      <FirstPersonCamera enabled={state.cameraMode === 'firstPerson'} />
 
       {/* Lighting */}
       <ambientLight intensity={isNight ? 0.05 : 0.4} color={isNight ? "#3333ff" : "#ffffff"} />
@@ -97,6 +106,10 @@ export const SceneContainer: React.FC<SceneProps> = ({ state }) => {
           mieDirectionalG={0.8} 
         />
       )}
+      
+      {/* Dynamic Clouds */}
+      <DynamicClouds time={state.time} weather={state.weather} />
+      
       {isNight && <Stars radius={200} depth={50} count={5000} factor={4} saturation={0} fade speed={1} />}
 
       {/* World Components */}
